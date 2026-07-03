@@ -1,5 +1,11 @@
-﻿$PSScriptRoot = Split-Path -Parent -Path $MyInvocation.MyCommand.Path
+$PSScriptRoot = Split-Path -Parent -Path $MyInvocation.MyCommand.Path
 if (-not $PSScriptRoot) { $PSScriptRoot = Get-Location }
+
+# Force UTF-8 Encoding for the console session and Python processes
+[Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
 
 Write-Host "이전 실행 중인 프로세스를 종료하고 재시작합니다..." -ForegroundColor Cyan
 

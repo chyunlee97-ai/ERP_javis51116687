@@ -62,7 +62,14 @@ def main():
     
     # Try using ohsung_mark.png or other existing images as tray icon
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    icon_names = ["ohsung_mark.png", "ohsung_mark_256.png", "mark.png", "mark.bmp"]
+    icon_names = [
+        "image/ohsung_mark_256.png",
+        "image/mark_512.png",
+        "ohsung_mark.png",
+        "ohsung_mark_256.png",
+        "mark.png",
+        "mark.bmp"
+    ]
     icon_loaded = False
     
     for name in icon_names:

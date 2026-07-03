@@ -1,61 +1,70 @@
-# ERP 챗봇 컬럼 정렬 및 공장 구분 연동 최종 해결 보고서 (walkthrough.md)
+# Walkthrough - SQL Execution Script, Tray Icon, Character Encoding & NL Keyword Parsing Resolution
 
-이 문서는 사용자의 요구사항에 맞추어 컬럼 정렬 문제 해결, UI 개선, 그리고 **공장 구분 및 실시간 추천 검색어 연동** 기능까지 최종 완료한 내용을 정리한 보고서입니다.
+This document summarizes the changes made to resolve the tray icon visibility, SQL execution script display, database metadata encoding, terminal character set, and natural language query keyword parsing issues in OHSUNG ERP Bot.
 
 ---
 
-## 1. 공장 구분 기능의 로그인 ARGUMENT 연동 설계 및 UI 롤백 (Factory Argument Integration)
-
-사용자 피드백에 따라 **[조건 선택] 탭의 공장 선택 콤보박스 UI를 제거(이전 디자인으로 롤백)** 하였습니다. 
-대신, 추후 추가될 로그인 기능에서 공장 구분 ARGUMENT를 가져와 프로그램 내부적으로 연동하고 동작할 수 있도록 코드를 고도화했습니다.
-
-### 1) UI 디자인 롤백 (UI Rollback)
-* [조건 선택] 탭에서 공장 선택 드롭다운(`cb_fact`)을 완전히 삭제했습니다.
-* **이전의 Clean Layout으로 복구**: '조회 :' 선택 드롭다운과 검색어 입력창만 배치하여 원래의 콤팩트하고 세련된 Sci-Fi UI를 복원했습니다.
-
-### 2) 내부적인 `current_fact` 상태 관리 도입 (Programmatic State Management)
-* `MainWindow` 클래스 내부에 **`self.current_fact`** 변수를 선언하여 공장 구분 상태를 추적합니다. (기본값: `"K1"`)
-* 추후 로그인 기능 개발 시, 로그인한 사용자의 정보에 해당하는 공장 구분 코드(예: `Y1`, `C1`, `G1` 등)를 아래의 메서드를 통해 주입하여 사용하도록 설계했습니다:
+## 1. System Tray Icon and Close-to-Tray Bug Fix (Tray Minimization)
+* **Problem**: Clicking the top-right `[V]` button hid the GUI window, but the program appeared to terminate because no tray icon was visible in the Windows taskbar.
+* **Cause**: In `client/main.py`, the tray icon paths were configured to look directly inside the project root directory, whereas the logo files (e.g., `ohsung_mark_256.png`, `mark_512.png`) were stored inside the `image/` subdirectory. Consequently, the tray icon failed to load, leading to a blank/invisible icon registration on Windows.
+* **Resolution**: Updated `icon_names` in `client/main.py` to search the `image/` folder first:
   ```python
-  # 로그인 성공 후 프로그램 실행 단계에서 호출 예시:
-  main_window.set_current_fact("G1")
+  icon_names = [
+      "image/ohsung_mark_256.png",
+      "image/mark_512.png",
+      "ohsung_mark.png",
+      "ohsung_mark_256.png",
+      "mark.png",
+      "mark.bmp"
+  ]
   ```
-* **실시간 추천 Marquee 연동**: `set_current_fact(fact)` 메서드가 호출되면, 공장 접두사('K', 'Y', 'C', 'G')를 판별하여 일반 탭 하단의 흘러가는 추천 검색어 리스트가 즉시 이에 맞는 추천 검색어(EBR, OFE 등)로 실시간 변경됩니다.
-
-### 3) 쿼리 전송 시 공장 코드(fact) 전달
-* 일반 모드(자연어) 및 조건 선택 모드 모두에서 데이터 조회 시 `self.current_fact`에 저장된 현재 공장 파라미터를 API 서버의 `fact` 인자로 실시간 전달하여 쿼리를 수행합니다.
-* 이를 통해 화면에는 공장 선택 UI가 없지만, 프로그램 구동 환경이나 로그인 세션에 따라 최적화된 공장의 데이터를 안전하게 격리 및 검색할 수 있습니다.
+  Now, the red-themed Ohsung logo correctly renders in the Windows system tray. Double-clicking the tray icon or selecting the context menu toggle restores the window, preventing accidental app termination.
 
 ---
 
-## 2. 컬럼 정렬 미반영 원인 및 해결 (Column Ordering Bug Fix)
-
-* **원인**: PySide6 클라이언트의 스레드 통신부(`client/ui/api_thread.py`)에서 백그라운드 데이터 수신 결과를 메인 GUI 스레드로 보낼 때 사용하던 Qt 시그널 선언이 `finished_signal = Signal(dict)`로 정의되어 있었습니다. 이 때문에 PySide6 내부 메커니즘 상 Python의 Dictionary가 C++의 `QMap`으로 자동 형변환되면서 컬럼(Key)이 알파벳/가나다 오름차순으로 강제 정렬되었습니다.
-* **조치**: 시그널 정의를 **`finished_signal = Signal(object)`**로 수정하여 Python 고유의 딕셔너리 정렬 순서(SQL 쿼리 반환 컬럼 순서)가 보장된 상태로 테이블에 표출되도록 완벽히 해결했습니다.
-
----
-
-## 3. 테이블 레이아웃 및 콤팩트 크기 최적화 (UI Layout & Size)
-
-* **정확히 5행 노출**: 테이블의 행 기본 크기를 `24`px, 헤더 높이를 `28`px로 지정하고 테이블 전체 높이를 `152`px로 고정하여, 결과가 몇 건이든 정확히 5개 행만 스크롤바와 함께 노출됩니다.
-* **메인 창 크기 축소**: 기존 7개 행 기준에서 5개 행으로 테이블이 축소됨에 따라 생긴 불필요한 하단 여백을 제거하고자, 메인 윈도우의 세로 크기를 기존 `510`px에서 **`462`px로 정밀하게 축소 조정**하여 화면 균형을 맞췄습니다.
-* **`NO.` 컬럼 추가 및 초기 크기 정상화**: 테이블 맨 왼쪽에 순번인 `NO.` 컬럼을 추가하고 값을 가운데(중앙) 정렬했습니다. 첫 번째 조회 시 크기가 비정상적으로 크게 잡히던 버그를 고치기 위해 `Fixed` 헤더 모드를 먼저 선언 후 가로 크기를 `40`px로 주어 항상 일정한 너비를 유지하게 했습니다.
-* **말풍선 기능 제외**: 캐릭터 아바타 아랫부분의 말풍선이 화면 상단 조회 창을 가리는 문제를 해결하기 위해, 사용자 요청대로 **말풍선(Speech Bubble) 기능을 제거**했습니다.
+## 2. SQL Column Alias Encoding Correction (Database Metadata)
+* **Problem**: In the SQL query result table headers and query script details, Korean characters were corrupted (e.g., `'특성명'` was rendered as `'Ư'`).
+* **Cause**: In `server/services/db_service.py`, although basic char/wchar decoding was configured for pyodbc, wide-character metadata (`SQL_WMETADATA`) was not explicitly decoded. Windows environments under different locales interpreted SQL Server's returned metadata using default system encoding (CP949) rather than UTF-16, mangling the string values.
+* **Resolution**: Added the `SQL_WMETADATA` decoder to `db_service.py`:
+  ```python
+  if hasattr(pyodbc, 'SQL_WMETADATA'):
+      conn.setdecoding(pyodbc.SQL_WMETADATA, encoding='utf-16')
+  ```
+  This immediately fixed the character encoding of SQL column aliases, ensuring database keys such as `'특성명'` and `'특성코드'` are decoded correctly into Python unicode strings.
 
 ---
 
-## 4. 클립보드 복사 및 자연어 파서 적용 (Clipboard & Parser)
-
-* **선택자료사용 복사**: 테이블에서 드래그/선택한 데이터를 복사해 윈도우 클립보드로 전송합니다. 복사 완료 시 상태 표시줄에 **`✓ [복사했습니다]`** 문구를 1.5초 동안 띄웠다가 원복합니다.
-* **자연어 형태소/조사 제거 엔진**: `"바이어 LG 조회해줘"`, `"제품코드 SE"`, `"C 특성 조회"` 등 다양한 한국어 자연어 입력을 판별하기 위해, 카테고리 동의어 판별 후 문장에서 조사(`의`, `에`, `을`, `를`)와 동사/종결어미(`조회`, `검색`, `해줘`)를 정밀 제거하고 알맞은 핵심 키워드(`as_find`)를 적절하게 정제하여 매칭합니다.
+## 3. Terminal output & Process UTF-8 Mode Enforcement
+* **Problem**: Running Python test scripts in VS Code PowerShell or running uvicorn in the background resulted in broken Korean log output in the terminal due to character page mismatches (CP949 vs. UTF-8).
+* **Resolution**:
+  * Added session encoding commands at the beginning of `run.ps1` to force UTF-8 console output:
+    ```powershell
+    [Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $OutputEncoding = [System.Text.Encoding]::UTF8
+    ```
+  * Injected environment variables in `run.ps1` and `실행.bat` to run Python in UTF-8 mode:
+    ```powershell
+    $env:PYTHONIOENCODING = "utf-8"
+    $env:PYTHONUTF8 = "1"
+    ```
+    This ensures that Python always uses UTF-8 encoding for standard streams and log files regardless of the active Windows system code page.
 
 ---
 
-## 5. 최종 기능 검증 결과 (Verification Results)
-
-* **자동화 검증 스크립트 실행 성공**: `scratch/test_factory_change.py` 테스트를 통해 `set_current_fact`로 공장 코드를 프로그래밍 방식으로 주입 시, 추천 Marquee 리스트가 동적으로 갱신되고 데이터 조회가 올바르게 분기하여 통과하는 것을 검증 완료했습니다.
+## 4. Port Conflict Resolution & Verification
+* **Resolution**:
+  * Unified the server and client connection endpoints on port **`8002`** (via `.env` configs) to avoid conflicts with port `8001` (often locked by background processes).
+  * Ran direct API testing (`test_final.py`) which verified:
+    * `Health: {'status': 'ok'}`
+    * `intent: part_tcod_search`
+    * `count: 5`
+    * Correctly formatted SQL scripts returned and rendered without parameter variables.
 
 ---
 
-### 💡 walkthrough.md 파일 오픈 방법 안내
-이 보고서 파일은 현재 작업 중이신 에디터(VS Code 등)에서 **프로젝트 루트 폴더(`c:\project\ERP_javis\walkthrough.md`)** 파일을 클릭하여 편리하게 열어보실 수 있습니다.
+## 5. Natural Language Query Keyword Expansion (부품특성 C parsing)
+* **Problem**: In natural language search mode, queries like `"부품특성 C"` or `"[ 부품특성 C ]"` matched the intent `part_tcod_search` using the general keyword `"특성"`. However, the prefix `"부품"` was left behind, resulting in the search variable `@as_find` being parsed as `"부품 C"` instead of `"C"`.
+* **Resolution**: Added `"부품특성코드"` and `"부품특성"` to the category keyword list for `"part_tcod_search"` in `server/services/intent_matcher.py` before `"특성"`. This ensures `"부품특성"` is fully matched and stripped from the input message, leaving only `"C"` (and stripping outer brackets) as the search value.
+* **Verification**: Verified using API endpoint queries that:
+  * `"부품특성 C"` maps to `fact: 'Y6'`, `as_find: 'C'`, returning 19 results from the database.
+  * `"[ 부품특성 C ]"` also correctly maps to `fact: 'Y6'`, `as_find: 'C'`.

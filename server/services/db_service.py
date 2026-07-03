@@ -244,7 +244,8 @@ def execute_query(query: str, params: list, limit: int = None, offset: int = 0) 
         # Enforce pyodbc connection encoding/decoding for Korean character set (CP949 / UTF-16)
         conn.setdecoding(pyodbc.SQL_CHAR, encoding='cp949')
         conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-16')
-        # conn.setencoding(encoding='utf-8') # Removed: causes syntax error with Korean quotes
+        if hasattr(pyodbc, 'SQL_WMETADATA'):
+            conn.setdecoding(pyodbc.SQL_WMETADATA, encoding='utf-16')
         
         cursor = conn.cursor()
         

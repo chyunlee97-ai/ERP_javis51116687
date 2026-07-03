@@ -216,9 +216,9 @@ def match_intent(message: str, default_fact: str = "K1") -> tuple[dict | None, l
     search_order = [
         ("phone_search", ["내선번호", "전화번호", "연락처", "내선"]),
         ("prod_code_search", ["제품코드"]),
-        ("part_tcod_search", ["특성코드", "특성"]),
-        ("part_detail_search", ["부품번호", "부품"]),
-        ("model_search", ["영업모델", "모델", "제품"]),
+        ("part_tcod_search", ["부품특성코드", "부품특성", "특성코드", "특성"]),
+        ("part_detail_search", ["부품상세정보", "부품상세", "부품번호", "부품"]),
+        ("model_search", ["영업모델", "모델상세정보", "제품상세정보", "제품상세", "모델정보상세", "제품정보상세", "모델", "제품"]),
         ("vend_search", ["거래처", "바이어", "고객사"])
     ]
     
