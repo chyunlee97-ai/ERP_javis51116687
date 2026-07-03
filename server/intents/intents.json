@@ -1,0 +1,149 @@
+[
+  {
+    "intent": "vend_search",
+    "examples": [
+      "{fact} 공장 {as_find} 거래처 조회",
+      "{fact} 공장 {as_find} 거래처 검색",
+      "{fact} 공장 {as_find} 거래처",
+      "{as_find} 거래처 조회",
+      "{as_find} 거래처 검색",
+      "{as_find} 거래처"
+    ],
+    "query": "DECLARE @fact char(2);\nDECLARE @as_find varchar(30);\nSET @fact = ?;\nSET @as_find = ?;\n\nSELECT '거래처명' = CASE WHEN substring(vend_fact,2,1) ='1'  THEN vend_name ELSE vend_nam3+'('+vend_name+')' END,\n       '거래처번호' = vend_keyx\n  FROM acvend\n WHERE vend_fact = @fact and\n       ( (vend_name like '%'+@as_find+'%') or (vend_nam3 like '%'+@as_find+'%') or (vend_keyx like '%'+@as_find+'%') ) -- # 거래처 조회시 거래처명 과 거래처번호 일부분을 가지고 조회 가능",
+    "params": [
+      {
+        "name": "fact",
+        "from_input": true,
+        "default": "K1"
+      },
+      {
+        "name": "as_find",
+        "from_input": true
+      }
+    ]
+  },
+  {
+    "intent": "model_search",
+    "examples": [
+      "{fact} 공장 {as_find} 모델상세정보 조회",
+      "{fact} 공장 {as_find} 제품상세정보 조회",
+      "{fact} 공장 {as_find} 제품상세 조회",
+      "{fact} 공장 {as_find} 모델정보상세 조회",
+      "{fact} 공장 {as_find} 제품정보상세 조회",
+      "{fact} 공장 {as_find} 모델 조회",
+      "{as_find} 모델상세정보 조회",
+      "{as_find} 제품상세정보 조회",
+      "{as_find} 제품상세 조회",
+      "{as_find} 모델정보상세 조회",
+      "{as_find} 제품정보상세 조회",
+      "{as_find} 모델 조회"
+    ],
+    "query": "DECLARE @fact char(2);\nDECLARE @as_find varchar(30);\nSET @fact = ?;\nSET @as_find = ?;\n\nIF substring(@fact,1,1) <> 'Y'\n   BEGIN\n      SELECT '당사모델번호' = modl_modl,\n\t         '영업모델' = modl_key2,\n             '제품명' = modl_name,\n\t\t\t '규격' = isnull(modl_spec,''),\n\t\t\t '제품코드' = modl_pcod,\n\t\t\t '제품코드명' = isnull(pcod_name,'')\n        FROM bumodl\n\t\t     left join bupcod with (nolock) on ( pcod_fact = modl_fact and pcod_pcod = modl_pcod )\n       WHERE modl_fact = @fact and\n             ( (modl_key2 like '%'+@as_find+'%') or (modl_modl like '%'+@as_find+'%') )\n    ORDER BY modl_modl ASC\n   END\n\nIF substring(@fact,1,1) = 'Y'\n   BEGIN\n      SELECT '영업모델' = modl_key2,\n             '제품명' = modl_name,\n\t\t\t '규격' = isnull(modl_spec,''),\n\t\t\t '제품코드' = modl_pcod,\n\t\t\t '제품코드명' = isnull(pcod_name,'')\n        FROM bumodl\n             left join bupcod with (nolock) on ( pcod_fact = modl_fact and pcod_pcod = modl_pcod )\n       WHERE modl_fact = @fact and\n             ( (modl_key2 like '%'+@as_find+'%') or (modl_modl like '%'+@as_find+'%') )\n    ORDER BY modl_modl ASC\n   END",
+    "params": [
+      {
+        "name": "fact",
+        "from_input": true,
+        "default": "K1"
+      },
+      {
+        "name": "as_find",
+        "from_input": true
+      }
+    ]
+  },
+  {
+    "intent": "prod_code_search",
+    "examples": [
+      "{fact} 공장 {as_find} 제품코드 조회",
+      "{fact} 공장 {as_find} 제품코드 검색",
+      "{as_find} 제품코드 조회",
+      "{as_find} 제품코드 검색"
+    ],
+    "query": "DECLARE @fact char(2);\nDECLARE @as_find varchar(30);\nSET @fact = ?;\nSET @as_find = ?;\n\nSELECT '제품명' = CASE WHEN substring(pcod_fact,2,1) ='1'  THEN pcod_name ELSE pcod_nam3+'('+pcod_name+')' END,\n       '제품코드' = pcod_pcod\n  FROM bupcod\n WHERE pcod_fact = @fact and\n       ( (pcod_name like '%'+@as_find+'%') or (pcod_nam3 like '%'+@as_find+'%') )",
+    "params": [
+      {
+        "name": "fact",
+        "from_input": true,
+        "default": "K1"
+      },
+      {
+        "name": "as_find",
+        "from_input": true
+      }
+    ]
+  },
+  {
+    "intent": "part_detail_search",
+    "examples": [
+      "{fact} 공장 {as_find} 부품상세정보 조회",
+      "{fact} 공장 {as_find} 부품상세 조회",
+      "{fact} 공장 {as_find} 부품정보상세 조회",
+      "{fact} 공장 {as_find} 부품 조회",
+      "{as_find} 부품상세정보 조회",
+      "{as_find} 부품상세 조회",
+      "{as_find} 부품정보상세 조회",
+      "{as_find} 부품 조회"
+    ],
+    "query": "DECLARE @fact char(2);\nDECLARE @as_find varchar(30);\nSET @fact = ?;\nSET @as_find = ?;\n\nSELECT '부품번호' = part_part,\n       '부품명' = part_name,\n\t   '단위' = isnull(part_unix,''),\n\t   '규격' = isnull(part_spec,''),\n\t   '특성코드' = part_tcod,\t\t\t \n\t   '구분' =  CASE WHEN isnull(tcod_assy,'1') = '1' THEN '원재료' ELSE '재공품' END\n  FROM mppart_v\t     \n WHERE part_fact = @fact and\n       ( (part_part like '%'+@as_find+'%') or (part_name like '%'+@as_find+'%') )\nORDER BY part_part ASC",
+    "params": [
+      {
+        "name": "fact",
+        "from_input": true,
+        "default": "K1"
+      },
+      {
+        "name": "as_find",
+        "from_input": true
+      }
+    ]
+  },
+  {
+    "intent": "part_tcod_search",
+    "examples": [
+      "{fact} 공장 {as_find} 부품특성코드 조회",
+      "{fact} 공장 {as_find} 부품특성코드 검색",
+      "{as_find} 부품특성코드 조회",
+      "{as_find} 부품특성코드 검색"
+    ],
+    "query": "DECLARE @fact char(2);\nDECLARE @as_find varchar(30);\nSET @fact = ?;\nSET @as_find = ?;\n\nSELECT '특성명' = tcod_name,\n       '특성코드' = tcod_tcod\n  FROM mptcod\n WHERE tcod_fact = @fact and\n       ( (tcod_name like '%'+@as_find+'%') or (tcod_tcod like '%'+@as_find+'%') )",
+    "params": [
+      {
+        "name": "fact",
+        "from_input": true,
+        "default": "K1"
+      },
+      {
+        "name": "as_find",
+        "from_input": true
+      }
+    ]
+  },
+  {
+    "intent": "phone_search",
+    "examples": [
+      "{fact} 공장 {as_find} 내선번호 조회",
+      "{fact} 공장 {as_find} 전화번호 조회",
+      "{fact} 공장 {as_find} 내선 조회",
+      "{fact} 공장 {as_find} 연락처 조회",
+      "{as_find} 내선번호 조회",
+      "{as_find} 전화번호 조회",
+      "{as_find} 내선 조회",
+      "{as_find} 연락처 조회",
+      "{as_find} 내선번호",
+      "{as_find} 전화번호",
+      "{as_find} 연락처"
+    ],
+    "query": "DECLARE @fact char(2);\nDECLARE @as_find varchar(30);\nSET @fact = ?;\nSET @as_find = ?;\nSET @as_find = '%'+@as_find+'%';\n\nDECLARE @ColumnList NVARCHAR(MAX);\nDECLARE @SQL NVARCHAR(MAX);\n\nSET @ColumnList = STUFF((\n    SELECT ', obot_' + code_code + ' AS [' + code_name + ']'\n    FROM bacode WITH (NOLOCK)\n    WHERE code_fact = @fact \n      AND code_gubn = 'OBOT_1'\n    ORDER BY code_code\n    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');\n\nSET @SQL = N'\nSELECT ' + @ColumnList + N'\nFROM baobot WITH (NOLOCK)\n     INNER JOIN bacode WITH (NOLOCK) \n        ON ( obot_fact = code_fact \n             AND obot_gubn = code_code \n             AND code_gubn =''OBOT_GUBN'' )\nWHERE obot_fact = @fact \n  and( (obot_tex1 like @as_find ) or (obot_tex2 like @as_find ) or (obot_tex3 like @as_find) or (obot_tex4 like @as_find) )\n  AND obot_gubn = ''1''';\n\nEXEC sp_executesql @SQL, \n                   N'@fact CHAR(2), @as_find VARCHAR(30)', \n                   @fact = @fact, \n                   @as_find = @as_find;",
+    "params": [
+      {
+        "name": "fact",
+        "from_input": true,
+        "default": "K1"
+      },
+      {
+        "name": "as_find",
+        "from_input": true
+      }
+    ]
+  }
+]
