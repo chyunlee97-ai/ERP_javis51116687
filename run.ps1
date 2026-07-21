@@ -1,4 +1,4 @@
-$PSScriptRoot = Split-Path -Parent -Path $MyInvocation.MyCommand.Path
+﻿$PSScriptRoot = Split-Path -Parent -Path $MyInvocation.MyCommand.Path
 if (-not $PSScriptRoot) { $PSScriptRoot = Get-Location }
 
 # Force UTF-8 Encoding for the console session and Python processes

@@ -1,9 +1,11 @@
 ﻿declare @fact char(2),
+        @setl char(2),
         @as_find varchar(30)
 
 set @fact = 'Y6'
---set @as_find = '김'
-set @as_find = '%'+ @as_find+ '%'
+set @setl = 'Y7'
+set @as_find = '법'
+set @as_find = '%'+ @as_find+ '%';
 
 
 -- 1. 동적 쿼리를 담을 변수들을 선언합니다.
@@ -25,16 +27,15 @@ SET @ColumnList = STUFF((
 SET @SQL = N'
 SELECT ' + @ColumnList + N'
 FROM baobot WITH (NOLOCK)
-     INNER JOIN bacode WITH (NOLOCK) 
-        ON ( obot_fact = code_fact 
-             AND obot_gubn = code_code 
-             AND code_gubn =''OBOT_GUBN'' )
 WHERE obot_fact = @fact 
+  and obot_setl = @setl 
   and( (obot_tex1 like @as_find ) or (obot_tex2 like @as_find ) or (obot_tex3 like @as_find) or (obot_tex4 like @as_find) )
   AND obot_gubn = ''1''';
 
 -- 4. 최종 동적 쿼리 실행
 EXEC sp_executesql @SQL, 
-                   N'@fact CHAR(2), @as_find VARCHAR(30)', 
+                   N'@fact CHAR(2), @setl CHAR(2),@as_find VARCHAR(30)', 
                    @fact = @fact, 
+				   @setl = @setl, 
                    @as_find = @as_find;
+

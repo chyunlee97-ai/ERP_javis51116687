@@ -18,6 +18,35 @@ def get_mock_data(query: str, params: list) -> list[dict]:
     """
     print(f"[Mock DB] Executing query: {query} with params: {params}")
     
+    # 0. 사용자 조회 (bauser)
+    if "bauser" in query.lower():
+        fact_val = params[0] if len(params) > 0 else "Y6"
+        idno_val = params[1] if len(params) > 1 else ""
+        pasw_val = params[2] if len(params) > 2 else ""
+        
+        # Valid user combos: (fact, idno, pasw)
+        valid_users = [
+            ("Y6", "Y6", "q"),
+            ("Y1", "Y1", "q"),
+            ("Y5", "Y5", "q"),
+            ("K1", "K1", "q"),
+            ("K1", "000005", "12345"),
+            ("K1", "000006", "12345")
+        ]
+        
+        is_valid = False
+        for f, i, p in valid_users:
+            if fact_val == f and idno_val == i and pasw_val == p:
+                is_valid = True
+                break
+        
+        # General backup rule: if ID equals Fact and Password is 'q'
+        if idno_val == fact_val and pasw_val == "q":
+            is_valid = True
+            
+        cnt = 1 if is_valid else 0
+        return [{"cnt": cnt}]
+
     # Extract fact and search term (as_find) from params
     fact = params[0] if len(params) > 0 else "K1"
     as_find = params[1] if len(params) > 1 else ""
@@ -31,10 +60,13 @@ def get_mock_data(query: str, params: list) -> list[dict]:
             {"vend_fact": "K1", "vend_keyx": "V0001", "vend_name": "에이스전자", "vend_nam3": "ACE"},
             {"vend_fact": "K1", "vend_keyx": "V0002", "vend_name": "LG디스플레이", "vend_nam3": "LG"},
             {"vend_fact": "K1", "vend_keyx": "V0003", "vend_name": "삼성에스디아이", "vend_nam3": "SAMSUNG"},
+            {"vend_fact": "K1", "vend_keyx": "V0008", "vend_name": None, "vend_nam3": "NULL_TEST"}, # NULL 이름 테스트용
             {"vend_fact": "Y1", "vend_keyx": "V0004", "vend_name": "베트남테크", "vend_nam3": "VIETNAM"},
             {"vend_fact": "Y1", "vend_keyx": "V0005", "vend_name": "현대모비스", "vend_nam3": "HYUNDAI"},
             {"vend_fact": "C1", "vend_keyx": "V0006", "vend_name": "LG이노텍", "vend_nam3": "LG"},
             {"vend_fact": "G1", "vend_keyx": "V0007", "vend_name": "LG화학", "vend_nam3": "LG"},
+            {"vend_fact": "Y6", "vend_keyx": "V0009", "vend_name": "베트남법인", "vend_nam3": "VN_FACT"}, # Y6 테스트 (vend_nam3 존재)
+            {"vend_fact": "Y6", "vend_keyx": "V0010", "vend_name": "하노이테크", "vend_nam3": ""},      # Y6 테스트 (vend_nam3 없음)
         ]
         
         # Filter by fact
@@ -44,16 +76,24 @@ def get_mock_data(query: str, params: list) -> list[dict]:
         if as_find_val:
             filtered = [
                 c for c in filtered 
-                if (as_find_val.lower() in c["vend_name"].lower() or 
-                    as_find_val.lower() in c["vend_nam3"].lower() or 
-                    as_find_val.lower() in c["vend_keyx"].lower())
+                if (as_find_val.lower() in (c["vend_name"] or "").lower() or 
+                    as_find_val.lower() in (c["vend_nam3"] or "").lower() or 
+                    as_find_val.lower() in (c["vend_keyx"] or "").lower())
             ]
             
         # Map to final output columns: 거래처번호, 거래처명
         results = []
         for c in filtered:
             is_fact_2_1 = len(c["vend_fact"]) >= 2 and c["vend_fact"][1] == '1'
-            vend_name_display = c["vend_name"] if is_fact_2_1 else f"{c['vend_nam3']}({c['vend_name']})"
+            # 변경전: vend_name_display = c["vend_name"] if is_fact_2_1 else f"{c['vend_nam3']}({c['vend_name']})"
+            if is_fact_2_1:
+                vend_name_display = c["vend_name"] if c["vend_name"] is not None else ""
+            else:
+                is_nam3_empty = c["vend_nam3"] is None or c["vend_nam3"].strip() == ""
+                if is_nam3_empty:
+                    vend_name_display = c["vend_name"] if c["vend_name"] is not None else ""
+                else:
+                    vend_name_display = "Insert Vend Name!"
             results.append({
                 "거래처명": vend_name_display,
                 "거래처번호": c["vend_keyx"]
@@ -220,6 +260,42 @@ def get_mock_data(query: str, params: list) -> list[dict]:
                 "직급": p["직급"],
                 "이름": p["이름"],
                 "내선번호": p["내선번호"]
+            })
+        return results
+        
+    elif "obot_prog" in query.lower() or "obuspr" in query.lower():
+        # Handle selective programs check query
+        lang_val = "KR"
+        for p in params:
+            if isinstance(p, str) and p.strip() in ["KR", "EN", "CH", "VN", "SP"]:
+                lang_val = p.strip()
+                break
+                
+        names_map = {
+            "KR": {
+                "1": "거래처 조회",
+                "2": "모델정보 조회",
+                "3": "제품코드 조회",
+                "4": "부품정보 조회",
+                "5": "부품특성코드 조회",
+                "6": "내선번호 조회"
+            },
+            "EN": {
+                "1": "Vender Select",
+                "2": "Model Information",
+                "3": "Product Code",
+                "4": "Part Number Select",
+                "5": "Part Property",
+                "6": "Extension Select"
+            }
+        }
+        
+        lang_dict = names_map.get(lang_val, names_map["KR"])
+        results = []
+        for code, name in lang_dict.items():
+            results.append({
+                "code_code": code,
+                "조회시트": name
             })
         return results
         

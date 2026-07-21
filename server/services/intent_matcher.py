@@ -253,9 +253,11 @@ def match_intent(message: str, default_fact: str = "K1") -> tuple[dict | None, l
                 for p_cfg in params_config:
                     p_name = p_cfg.get("name")
                     if p_name == "fact":
-                        mapped_params.append(fact)
+                        mapped_params.append(default_fact)
                     elif p_name == "as_find":
                         mapped_params.append(as_find)
+                    elif p_name == "setl":
+                        mapped_params.append(fact)
                     else:
                         mapped_params.append(p_cfg.get("default", ""))
                 return item, mapped_params
@@ -285,6 +287,10 @@ def match_intent(message: str, default_fact: str = "K1") -> tuple[dict | None, l
                             wrap_template = param_cfg.get("wrap", "{value}")
                             formatted_val = wrap_template.replace("{value}", val)
                             mapped_params.append(formatted_val)
+                        elif name == "fact":
+                            mapped_params.append(default_fact)
+                        elif name == "setl":
+                            mapped_params.append(captured.get("fact") or default_fact)
                         else:
                             mapped_params.append(param_cfg.get("default", ""))
                     return item, mapped_params
@@ -305,6 +311,12 @@ def match_intent(message: str, default_fact: str = "K1") -> tuple[dict | None, l
                             wrap_template = param_cfg.get("wrap", "{value}")
                             formatted_val = wrap_template.replace("{value}", val)
                             mapped_params.append(formatted_val)
+                        elif param_cfg.get("name") == "fact":
+                            mapped_params.append(default_fact)
+                        elif param_cfg.get("name") == "setl":
+                            # In this fallback unnamed regex mode, we can't easily get the extracted fact 
+                            # if it wasn't captured sequentially. We fallback to default_fact.
+                            mapped_params.append(default_fact)
                         else:
                             mapped_params.append(param_cfg.get("default", ""))
                     

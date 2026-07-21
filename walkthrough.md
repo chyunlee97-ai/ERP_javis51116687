@@ -1,70 +1,64 @@
-# Walkthrough - SQL Execution Script, Tray Icon, Character Encoding & NL Keyword Parsing Resolution
+# 챗봇 OHSUNG ERP Bot - 작업 및 변경 내용 보고서 (Walkthrough)
 
-This document summarizes the changes made to resolve the tray icon visibility, SQL execution script display, database metadata encoding, terminal character set, and natural language query keyword parsing issues in OHSUNG ERP Bot.
-
----
-
-## 1. System Tray Icon and Close-to-Tray Bug Fix (Tray Minimization)
-* **Problem**: Clicking the top-right `[V]` button hid the GUI window, but the program appeared to terminate because no tray icon was visible in the Windows taskbar.
-* **Cause**: In `client/main.py`, the tray icon paths were configured to look directly inside the project root directory, whereas the logo files (e.g., `ohsung_mark_256.png`, `mark_512.png`) were stored inside the `image/` subdirectory. Consequently, the tray icon failed to load, leading to a blank/invisible icon registration on Windows.
-* **Resolution**: Updated `icon_names` in `client/main.py` to search the `image/` folder first:
-  ```python
-  icon_names = [
-      "image/ohsung_mark_256.png",
-      "image/mark_512.png",
-      "ohsung_mark.png",
-      "ohsung_mark_256.png",
-      "mark.png",
-      "mark.bmp"
-  ]
-  ```
-  Now, the red-themed Ohsung logo correctly renders in the Windows system tray. Double-clicking the tray icon or selecting the context menu toggle restores the window, preventing accidental app termination.
+이 문서는 OHSUNG ERP Bot에서 진행된 기능 개선, 버그 수정 및 UI 테마 변경 내용들을 기록하고 관리하는 문서입니다.
 
 ---
 
-## 2. SQL Column Alias Encoding Correction (Database Metadata)
-* **Problem**: In the SQL query result table headers and query script details, Korean characters were corrupted (e.g., `'특성명'` was rendered as `'Ư'`).
-* **Cause**: In `server/services/db_service.py`, although basic char/wchar decoding was configured for pyodbc, wide-character metadata (`SQL_WMETADATA`) was not explicitly decoded. Windows environments under different locales interpreted SQL Server's returned metadata using default system encoding (CP949) rather than UTF-16, mangling the string values.
-* **Resolution**: Added the `SQL_WMETADATA` decoder to `db_service.py`:
-  ```python
-  if hasattr(pyodbc, 'SQL_WMETADATA'):
-      conn.setdecoding(pyodbc.SQL_WMETADATA, encoding='utf-16')
-  ```
-  This immediately fixed the character encoding of SQL column aliases, ensuring database keys such as `'특성명'` and `'특성코드'` are decoded correctly into Python unicode strings.
+## [2026-07-20] 빈 입력필드 전송 시 "Insert Text!" 경고 말풍선 출력 및 차단
+* **작업 목표**: 입력 칸이 비어있는 상태에서 조회(전송) 시 불필요한 서버 호출을 방지하고 사용자에게 시각적으로 명확한 피드백을 제공.
+* **수정 파일**:
+  * `client/ui/main_window.py` ([main_window.py](file:///c:/project/ERP_javis/client/ui/main_window.py))
+  * `client/ui/scifi_avatar.py` ([scifi_avatar.py](file:///c:/project/ERP_javis/client/ui/scifi_avatar.py))
+* **상세 내용**:
+  * **빈값 검증 및 쿼리 요청 차단**:
+    - 일반(자연어) 모드와 조건선택 모드 공통으로 입력 필드가 비어있을 경우 데이터베이스 조회를 즉시 중단하고 리턴 처리합니다.
+  * **"Insert Text!" 경고 말풍선 구현**:
+    - 입력 오류에 대한 인지를 강화하기 위해 캐릭터 머리 위에 빨간색 배경의 경고 말풍선으로 **`Insert Text!`** 문구를 출력합니다.
+    - 해당 말풍선은 사용자의 요청사항에 맞춰 정확히 **`2초(2000ms)`** 동안 노출된 후 부드럽게 사라집니다.
+    - 텍스트 길이가 늘어남에 따라 말풍선 가로 크기를 기존 `90px`에서 **`100px`**로 확대하고, 아바타 센터 정렬에 맞게 좌표 및 말풍선 꼬리 위치를 수정했습니다.
+  * **버전 카운터 갱신**: 해당 검증 로직 반영 완료에 따라 최종 버전을 **`ver.20260720.010`**으로 갱신했습니다.
 
 ---
 
-## 3. Terminal output & Process UTF-8 Mode Enforcement
-* **Problem**: Running Python test scripts in VS Code PowerShell or running uvicorn in the background resulted in broken Korean log output in the terminal due to character page mismatches (CP949 vs. UTF-8).
-* **Resolution**:
-  * Added session encoding commands at the beginning of `run.ps1` to force UTF-8 console output:
-    ```powershell
-    [Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-    $OutputEncoding = [System.Text.Encoding]::UTF8
-    ```
-  * Injected environment variables in `run.ps1` and `실행.bat` to run Python in UTF-8 mode:
-    ```powershell
-    $env:PYTHONIOENCODING = "utf-8"
-    $env:PYTHONUTF8 = "1"
-    ```
-    This ensures that Python always uses UTF-8 encoding for standard streams and log files regardless of the active Windows system code page.
+## [2026-07-20] 일반(자연어) 탭과 조건선택 탭의 하단 여백 및 정렬 일치화
+* **작업 목표**: 두 탭 모드 전환 시 하단 프레임 경계선과의 여백 차이를 해결하여 대칭성과 정렬의 시각적 일관성을 확보.
+* **수정 파일**:
+  * `client/ui/main_window.py` ([main_window.py](file:///c:/project/ERP_javis/client/ui/main_window.py))
+* **상세 내용**:
+  * **하단 여백 100% 일치 (14px)**:
+    - 기존에는 "[일반(자연어)]" 탭의 추천 항목(`추천:`) 행 하단 여백이 "[조건선택]" 탭의 입력칸 하단 여백보다 약 `11px` 넓게 분리되어 불균형이 존재했습니다.
+    - `gen_layout.addSpacing(11)`을 입력 폼과 추천 행 사이에 삽입함으로써 추천 행을 정확히 `11px`만큼 아래로 밀어내어, 양쪽 탭 모두 하단 테두리와의 여백이 **정확히 `14px`로 완벽하게 대칭 정렬**되도록 수정했습니다.
 
 ---
 
-## 4. Port Conflict Resolution & Verification
-* **Resolution**:
-  * Unified the server and client connection endpoints on port **`8002`** (via `.env` configs) to avoid conflicts with port `8001` (often locked by background processes).
-  * Ran direct API testing (`test_final.py`) which verified:
-    * `Health: {'status': 'ok'}`
-    * `intent: part_tcod_search`
-    * `count: 5`
-    * Correctly formatted SQL scripts returned and rendered without parameter variables.
+## [2026-07-20] 결과 창 모서리 라운딩 복원 및 고품질 벡터 토글 버튼 적용
+* **작업 목표**: 결과 창의 모서리 라운딩을 완벽한 둥근 캡슐형태로 복원하고, 투박한 텍스트 기호(▼ / ▲)를 세련된 벡터 아웃라인 삼각형 버튼으로 교체하여 디자인 완성도를 높임.
+* **수정 파일**:
+  * `client/ui/main_window.py` ([main_window.py](file:///c:/project/ERP_javis/client/ui/main_window.py))
+* **상세 내용**:
+  * **커스텀 `ToggleTriangleButton` 위젯 구현**:
+    - `QPushButton`을 상속받아 직접 페인팅을 조절하는 전용 버튼을 제작했습니다.
+    - `QPainter`와 안티앨리어싱을 사용해 펜 두께 `2px`의 선명하고 현대적인 **벡터 아웃라인 역삼각형(▼) / 정삼각형(▲)**을 직접 렌더링합니다.
+    - 마우스 오버 시 에메랄드 틸 컬러로 색상이 변경되며, 은은하게 삼각형 내부를 반투명 글로우(Alpha: 40)로 채워 세련된 호버 효과를 완성했습니다.
+  * **접힘 상태 모서리 라운딩 복원 (Height `20px` -> `30px`)**:
+    - 기존 접힘 높이(`20px`)가 `border-radius: 15px`에 비해 너무 좁아 둥근 모서리가 일시적으로 각져 보이던 문제를 완벽하게 해결했습니다.
+    - 접힌 상태의 `a_frame` 높이를 최소 라운딩 조건인 **`30px`**로 변경하여, 모서리가 깔끔하게 라운딩 처리된 프리미엄 캡슐형태로 복구시켰습니다.
+    - 이에 맞춰 메인 윈도우의 접힘 시 목표 높이를 `230px` (관리자 제어판 오픈 시 `548px`)로 조정했습니다.
+  * **테이블 헤더선과 버튼의 겹침 현상 제거**:
+    - 펼침 상태에서 테이블 헤더 영역과 버튼이 겹치지 않도록 `a_frame` 상단 안쪽 여백(Contents Margin)을 `15px`에서 **`28px`**로 확대했습니다.
+    - 버튼은 여백 내부인 `y = 8px`에 위치시켜 테이블의 어떠한 격자선이나 텍스트와도 겹치지 않고 공백 영역에 알맞게 표시되도록 하였습니다.
+    - 버튼의 가로 위치를 `a_frame` 우측 끝단에서 정렬하여 테이블 우측 선과 완벽하게 일치되게 정렬을 맞췄습니다.
 
 ---
 
-## 5. Natural Language Query Keyword Expansion (부품특성 C parsing)
-* **Problem**: In natural language search mode, queries like `"부품특성 C"` or `"[ 부품특성 C ]"` matched the intent `part_tcod_search` using the general keyword `"특성"`. However, the prefix `"부품"` was left behind, resulting in the search variable `@as_find` being parsed as `"부품 C"` instead of `"C"`.
-* **Resolution**: Added `"부품특성코드"` and `"부품특성"` to the category keyword list for `"part_tcod_search"` in `server/services/intent_matcher.py` before `"특성"`. This ensures `"부품특성"` is fully matched and stripped from the input message, leaving only `"C"` (and stripping outer brackets) as the search value.
-* **Verification**: Verified using API endpoint queries that:
-  * `"부품특성 C"` maps to `fact: 'Y6'`, `as_find: 'C'`, returning 19 results from the database.
-  * `"[ 부품특성 C ]"` also correctly maps to `fact: 'Y6'`, `as_find: 'C'`.
+## [2026-07-20] 조회 성공(Complete!) 피드백 말풍선 색상 조정
+* **작업 목표**: 조회 성공 시 표시되는 Complete! 말풍선의 배경색을 흰색으로 변경하고 가독성을 위해 글자색 및 테두리선을 조정.
+* **수정 파일**:
+  * `client/ui/scifi_avatar.py` ([scifi_avatar.py](file:///c:/project/ERP_javis/client/ui/scifi_avatar.py))
+* **상세 내용**:
+  * **흰색 배경 및 에메랄드 테두리/글자색 구성**:
+    - Complete! 미니 말풍선의 배경색을 기존 에메랄드 그린(`#10a684`)에서 흰색(`#FFFFFF`)으로 변경하였습니다.
+    - 배경이 흰색으로 바뀜에 따라 글자가 보이지 않는 문제를 해결하기 위해, 글자색을 기존 흰색에서 에메랄드 그린(`#10a684`)으로 교체했습니다.
+    - 흰색 말풍선이 아바타의 투명한 배경 영역에서 선명하게 분리되어 보일 수 있도록 슬림한 에메랄드 그린 테두리선(1px)을 함께 그려 디자인 완성도를 높였습니다.
+  * **기존 색상 롤백 지원**:
+    - 언제든 이전의 에메랄드 그린 단색 배경 스타일로 되돌릴 수 있도록 기존 `self.bg_color` 정의 및 `paintEvent` 펜 설정 부위에 `[변경전]` 또는 `#변경전` 주석 처리를 추가하였습니다.

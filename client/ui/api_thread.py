@@ -26,3 +26,23 @@ class ApiQueryThread(QThread):
         )
         # Emit the result back to the main UI thread
         self.finished_signal.emit(response)
+
+class ApiProgramsThread(QThread):
+    # Signal to emit when API call finishes, returning the list of programs
+    finished_signal = Signal(object)
+    
+    def __init__(self, fact: str, lang: str = "KR", idno: str = "Y6"):
+        super().__init__()
+        self.fact = fact
+        self.lang = lang
+        self.idno = idno
+        
+    def run(self):
+        # Call the API service in the background
+        response = api_client.get_selective_programs(
+            fact=self.fact,
+            lang=self.lang,
+            idno=self.idno
+        )
+        # Emit the result back to the main UI thread
+        self.finished_signal.emit(response)

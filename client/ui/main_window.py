@@ -1,19 +1,29 @@
 import os
-from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, QEasingCurve, QPoint, QParallelAnimationGroup
-from PySide6.QtGui import QPixmap, QIcon, QCursor, QFontMetrics
+from PySide6.QtCore import Qt, QTimer, QSize, QPropertyAnimation, QEasingCurve, QPoint, QParallelAnimationGroup, QPointF, QRectF
+from PySide6.QtGui import QPixmap, QIcon, QCursor, QFontMetrics, QPainter, QPainterPath, QPen, QColor
 from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton, QComboBox, 
     QTableWidget, QTableWidgetItem, QVBoxLayout, QHBoxLayout, 
     QFrame, QHeaderView, QGraphicsDropShadowEffect, QSizePolicy,
     QTabWidget, QScrollArea
 )
-from ui.api_thread import ApiQueryThread
+from ui.api_thread import ApiQueryThread, ApiProgramsThread
 from ui.scifi_avatar import SciFiAvatarWidget, SpeechBubbleWidget
 from ui.admin_panels import AdminPanelsWidget
 
 
 # Get project root absolute path for loading images
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+def get_version():
+    version_file = os.path.join(PROJECT_ROOT, "version.txt")
+    if os.path.exists(version_file):
+        try:
+            with open(version_file, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            pass
+    return "ver.20260720.001"
 
 class MarqueeRecommendWidget(QScrollArea):
     def __init__(self, parent=None, items=None, on_item_clicked=None, button_style=None):
@@ -115,12 +125,72 @@ class MarqueeRecommendWidget(QScrollArea):
         else:
             hbar.setValue(next_val)
 
+class ToggleTriangleButton(QPushButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.is_collapsed = True
+        self.setFixedSize(30, 20)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet("background: transparent; border: none;")
+
+    def set_collapsed(self, collapsed):
+        self.is_collapsed = collapsed
+        self.update()
+
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        self.update()
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        is_hovered = self.underMouse()
+        color = QColor("#10a684") if is_hovered else QColor("#D32F2F")
+        
+        w, h = self.width(), self.height()
+        cx, cy = w / 2, h / 2
+        size = 11.0
+        
+        path = QPainterPath()
+        if self.is_collapsed:  # Inverted triangle (pointing down)
+            p1 = QPointF(cx - size/2, cy - size/3)
+            p2 = QPointF(cx + size/2, cy - size/3)
+            p3 = QPointF(cx, cy + 2*size/3)
+        else:  # Regular triangle (pointing up)
+            p1 = QPointF(cx - size/2, cy + size/3)
+            p2 = QPointF(cx + size/2, cy + size/3)
+            p3 = QPointF(cx, cy - 2*size/3)
+            
+        path.moveTo(p1)
+        path.lineTo(p2)
+        path.lineTo(p3)
+        path.closeSubpath()
+        
+        pen = QPen(color, 2)
+        pen.setJoinStyle(Qt.RoundJoin)
+        pen.setCapStyle(Qt.RoundCap)
+        painter.setPen(pen)
+        
+        if is_hovered:
+            fill_color = QColor(color)
+            fill_color.setAlpha(40)
+            painter.setBrush(fill_color)
+        else:
+            painter.setBrush(Qt.NoBrush)
+            
+        painter.drawPath(path)
+
 class MainWindow(QWidget):
-    def __init__(self):
+    def __init__(self, fact="Y6", idno="Y6", lang="KR"):
         super().__init__()
         
         # Load character images
-        img_path = os.path.join(PROJECT_ROOT, "image", "ohsung_mark_256.svg")
+        img_path = os.path.join(PROJECT_ROOT, "image", "ohsung_mark_256.png")
         self.pixmaps = {
             "idle": QPixmap(img_path),
             "thinking": QPixmap(img_path),
@@ -143,13 +213,20 @@ class MainWindow(QWidget):
         
         # Recommendations mapped by factory code prefix
         self.recommendations_map = {
-            'K': ['LG 거래처 조회', 'A43 모델 조회', 'SE 제품코드 조회', 'A1 부품 조회', 'C 특성 조회'],
-            'Y': ['VIETNAM 거래처 조회', '355 모델 조회', 'C100 제품코드 조회', '33 부품 조회', 'D1 특성 조회'],
-            'C': ['LG 거래처 조회', 'ACQ 모델 조회', 'WS 제품코드 조회', 'MAZ 부품 조회', 'CL 특성 조회'],
-            'G': ['LG 거래처 조회', 'EBR 모델 조회', 'A004 제품코드 조회', 'OFE 부품 조회', 'A01 특성 조회']
+            'K': ['LG 거래처 조회', 'A43 모델 조회', 'SE 제품코드 조회', 'A1 부품 조회', 'C 특성 조회','김해 영업 내선'],
+            'Y': ['VIETNAM 거래처 조회', '355 모델 조회', 'C100 제품코드 조회', '33 부품 조회', 'D1 특성 조회', '양주 영업 내선'],
+            'C': ['LG 거래처 조회', 'ACQ 모델 조회', 'WS 제품코드 조회', 'MAZ 부품 조회', 'CL 특성 조회','창원 영업 내선'],
+            'G': ['LG 거래처 조회', 'EBR 모델 조회', 'A004 제품코드 조회', 'OFE 부품 조회', 'A01 특성 조회','구미 영업 내선']
         }
         
-        self.current_fact = "K1"
+        # [변경전]
+        # self.current_fact = "K1"
+        # self.lang = "KR"
+        # self.idno = "Y6"
+        self.current_fact = fact
+        self.lang = lang
+        self.idno = idno
+        self.programs_thread = None
         
         self.current_offset = 0
         self.has_more_data = False
@@ -162,8 +239,9 @@ class MainWindow(QWidget):
         # Set initial state
         self.set_state("idle")
         
-        # Set initial factory and update recommendations marquee
-        self.set_current_fact("K1")
+        # [변경전]
+        # self.set_current_fact("K1")
+        self.set_current_fact(fact)
         
     @property
     def current_mode(self):
@@ -362,6 +440,10 @@ class MainWindow(QWidget):
         input_hbox_gen.addWidget(self.input_field_gen, 1)
         input_hbox_gen.addWidget(self.btn_send_gen)
         gen_layout.addLayout(input_hbox_gen)
+        
+        # Add spacing to align bottom margin with selective tab
+        gen_layout.addSpacing(11)
+        
         # Quick Queries Row (Marquee Scroll)
         quick_hbox_gen = QHBoxLayout()
         quick_hbox_gen.setSpacing(5)
@@ -519,7 +601,7 @@ class MainWindow(QWidget):
         self.a_frame.setGraphicsEffect(shadow2)
         
         a_vbox = QVBoxLayout(self.a_frame)
-        a_vbox.setContentsMargins(15, 15, 15, 15)
+        a_vbox.setContentsMargins(15, 28, 15, 5)
         a_vbox.setSpacing(15)
         
         # C-1. Answer State / Text Label (Moved next to buttons in actions layout)
@@ -554,9 +636,12 @@ class MainWindow(QWidget):
         self.table_widget.horizontalHeader().setFixedHeight(28)
         self.table_widget.verticalHeader().setDefaultSectionSize(24)
         self.table_widget.verticalHeader().setVisible(False)
+        self.table_widget.setFixedHeight(179)
         a_vbox.addWidget(self.table_widget)
-        self.table_widget.setVisible(False) # Hidden when there is no data
+        a_vbox.addStretch(1)
         self.table_widget.verticalScrollBar().valueChanged.connect(self.on_table_scroll)
+        self.table_widget.horizontalScrollBar().rangeChanged.connect(self.on_hscrollbar_range_changed)
+        self.table_widget.cellClicked.connect(self.on_cell_clicked)
         
         # C-3. Control Action Buttons (Detail View, Select Data)
         self.actions_layout = QHBoxLayout()
@@ -565,9 +650,10 @@ class MainWindow(QWidget):
         self.status_label = QLabel("질문을 입력하시면 사내 DB를 조회하여 대답을 드립니다.", self.a_frame)
         self.status_label.setStyleSheet("color: #555555; font-size: 12px; font-weight: bold; font-family: sans-serif;")
         
-        self.btn_detail = QPushButton("🔍 상세보기", self.a_frame)
-        self.btn_detail.setStyleSheet(self.get_action_button_style())
-        self.btn_detail.clicked.connect(self.on_detail_view)
+        # [변경전]
+        # self.btn_detail = QPushButton("🔍 상세보기", self.a_frame)
+        # self.btn_detail.setStyleSheet(self.get_action_button_style())
+        # self.btn_detail.clicked.connect(self.on_detail_view)
         
         self.btn_use_data = QPushButton("✓ 선택자료 사용", self.a_frame)
         self.btn_use_data.setStyleSheet(self.get_action_button_style())
@@ -575,14 +661,30 @@ class MainWindow(QWidget):
         
         self.actions_layout.addWidget(self.status_label)
         self.actions_layout.addStretch()
-        self.actions_layout.addWidget(self.btn_detail)
+        # [변경전]
+        # self.actions_layout.addWidget(self.btn_detail)
         self.actions_layout.addWidget(self.btn_use_data)
         
-        a_vbox.addLayout(self.actions_layout)
-        self.btn_detail.setVisible(False)
-        self.btn_use_data.setVisible(False)
+        actions_wrapper = QVBoxLayout()
+        actions_wrapper.setSpacing(2)
+        actions_wrapper.addLayout(self.actions_layout)
+        
+        self.version_label = QLabel(get_version(), self.a_frame)
+        self.version_label.setStyleSheet("color: #9c998f; font-size: 9px;")
+        self.version_label.setAlignment(Qt.AlignRight)
+        self.version_label.setContentsMargins(0, 0, 5, 0)
+        
+        actions_wrapper.addWidget(self.version_label)
+        
+        a_vbox.addLayout(actions_wrapper)
         
         main_vbox.addWidget(self.a_frame, 1)
+        
+        # C-4. Collapse Toggle Button (▼ / ▲)
+        self.btn_toggle_collapse = ToggleTriangleButton(self.a_frame)
+        self.btn_toggle_collapse.setObjectName("CollapseToggleBtn")
+        self.btn_toggle_collapse.clicked.connect(self.toggle_collapse)
+        self.is_collapsed = False
         
         import config
         self.show_admin = getattr(config, 'SHOW_DEVELOPER_PANELS', False)
@@ -593,10 +695,11 @@ class MainWindow(QWidget):
         
         if self.show_admin:
             self.admin_panels.setVisible(True)
-            self.resize(495, 680)
         else:
             self.admin_panels.setVisible(False)
-            self.resize(495, 462)
+            
+        # Initial state: collapsed
+        self.set_collapsed_state(True, animate=False)
         
     def get_quick_btn_style(self):
         return """
@@ -651,9 +754,9 @@ class MainWindow(QWidget):
             
     def on_selective_item_changed(self):
         self.input_field_sel.clear()
-        self.table_widget.setVisible(False)
-        self.btn_detail.setVisible(False)
-        self.btn_use_data.setVisible(False)
+        self.table_widget.clearContents()
+        self.table_widget.setRowCount(0)
+        self.table_widget.setColumnCount(0)
         self.status_label.setText("질문을 입력하시면 사내 DB를 조회하여 대답을 드립니다.")
         self.set_state("idle")
         
@@ -678,26 +781,103 @@ class MainWindow(QWidget):
         else:
             self.marquee_widget.setVisible(False)
             self.lbl_hint_gen.setVisible(False)
+            
+        self.load_selective_programs()
+        
+    def load_selective_programs(self):
+        if self.programs_thread and self.programs_thread.isRunning():
+            try:
+                self.programs_thread.finished_signal.disconnect(self.on_programs_loaded)
+            except (TypeError, RuntimeError):
+                pass
+            self.programs_thread.terminate()
+            self.programs_thread.wait()
+            
+        self.programs_thread = ApiProgramsThread(
+            fact=self.current_fact,
+            lang=self.lang,
+            idno=self.idno
+        )
+        self.programs_thread.finished_signal.connect(self.on_programs_loaded)
+        self.programs_thread.start()
+        
+    def on_programs_loaded(self, programs):
+        if not programs:
+            programs = [
+                {"code_code": "1", "name": "거래처 조회", "intent": "vend_search"},
+                {"code_code": "2", "name": "모델정보 조회", "intent": "model_search"},
+                {"code_code": "3", "name": "제품코드 조회", "intent": "prod_code_search"},
+                {"code_code": "4", "name": "부품정보 조회", "intent": "part_detail_search"},
+                {"code_code": "5", "name": "부품특성코드 조회", "intent": "part_tcod_search"},
+                {"code_code": "6", "name": "내선번호 조회", "intent": "phone_search"}
+            ]
+            
+        self.cb_sql_list.blockSignals(True)
+        old_intent = self.cb_sql_list.currentData()
+        self.cb_sql_list.clear()
+        
+        emojis = [
+            "📁", "📊", "🔑", "⚙️", "🏷️", "📞", "📦", "📋", "💼", "🏢",
+            "🚚", "🏭", "📅", "👤", "💰", "🔍", "📈", "📉", "🛡️", "✉️",
+            "🛠️", "💻", "📱", "💾", "🔗", "✏️"
+        ]
+        
+        intent_emojis = {
+            "vend_search": "📁",
+            "model_search": "📊",
+            "prod_code_search": "🔑",
+            "part_detail_search": "⚙️",
+            "part_tcod_search": "🏷️",
+            "phone_search": "📞"
+        }
+        
+        for i, prog in enumerate(programs):
+            code = str(prog.get("code_code", "")).strip()
+            name = str(prog.get("name", "")).strip()
+            intent = str(prog.get("intent", "")).strip()
+            
+            emoji = intent_emojis.get(intent)
+            if not emoji:
+                emoji = emojis[i % len(emojis)]
+                
+            label = f"{emoji} {i+1}. {name}"
+            self.cb_sql_list.addItem(label, intent)
+            
+        if old_intent:
+            idx = self.cb_sql_list.findData(old_intent)
+            if idx >= 0:
+                self.cb_sql_list.setCurrentIndex(idx)
+            else:
+                self.cb_sql_list.setCurrentIndex(0)
+        else:
+            self.cb_sql_list.setCurrentIndex(0)
+            
+        self.cb_sql_list.blockSignals(False)
+        self.on_selective_item_changed()
         
     def on_send(self):
         # Prevent double submit or running background queries
         if self.query_thread and self.query_thread.isRunning():
-            try:
-                self.query_thread.finished_signal.disconnect(self.on_query_finished)
-            except (TypeError, RuntimeError):
-                pass
+            return  # 이미 조회 중인 경우 중복 전송 요청 무시 (QThread 중첩 및 가비지 컬렉션 세그폴트 강제 종료 예방)
             
         text = self.get_current_input_field().text().strip()
         
-        if not text and self.current_mode == "general":
-            self.status_label.setText("⚠️ 질문을 입력해 주세요.")
+        if not text:
+            # Show "Insert Text!" on chatbot avatar overlay for 2 seconds (2000 ms)
+            self.char_avatar.show_mini_message("Insert Text!", is_success=False, duration_ms=2000)
+            if self.current_mode == "general":
+                self.status_label.setText("⚠️ 질문을 입력해 주세요.")
+            else:
+                self.status_label.setText("⚠️ 검색어를 입력해 주세요.")
             return
             
+        import time
+        self.query_start_time = time.time()
         self.set_state("thinking")
         self.status_label.setText("데이터베이스 조회 중...")
-        self.table_widget.setVisible(False)
-        self.btn_detail.setVisible(False)
-        self.btn_use_data.setVisible(False)
+        self.table_widget.clearContents()
+        self.table_widget.setRowCount(0)
+        self.table_widget.setColumnCount(0)
         
         self.current_offset = 0
         self.has_more_data = True
@@ -724,6 +904,16 @@ class MainWindow(QWidget):
         self.query_thread.start()
         
     def on_query_finished(self, response: dict):
+        import time
+        elapsed = time.time() - getattr(self, "query_start_time", 0)
+        delay = max(0.0, 1.0 - elapsed) # 최소 1.0초 동안 thinking 애니메이션 유지
+        
+        if delay > 0.0:
+            QTimer.singleShot(int(delay * 1000), lambda: self._process_query_finished(response))
+        else:
+            self._process_query_finished(response)
+
+    def _process_query_finished(self, response: dict):
         msg = response.get("message", "데이터를 불러왔습니다.")
         self.set_state("talking", msg)
         
@@ -739,12 +929,18 @@ class MainWindow(QWidget):
         new_results = response.get("result", [])
         
         if not new_results and self.current_offset == 0:
+            self.char_avatar.show_mini_message("No data!", is_success=False)
             self.status_label.setText("[0건 조회]")
-            self.table_widget.setVisible(False)
+            self.table_widget.clearContents()
+            self.table_widget.setRowCount(0)
+            self.table_widget.setColumnCount(0)
             self.has_more_data = False
+            self.set_collapsed_state(False, animate=True)
             return
             
+        self.char_avatar.show_mini_message("Complete!", is_success=True)
         self.search_results.extend(new_results)
+        self.set_collapsed_state(False, animate=True)
         
         if len(new_results) < 50:
             self.has_more_data = False
@@ -754,10 +950,6 @@ class MainWindow(QWidget):
         self.status_label.setText(f"[{len(self.search_results)}건 조회]")
             
         # Display data in table
-        self.table_widget.setVisible(True)
-        self.btn_detail.setVisible(True)
-        self.btn_use_data.setVisible(True)
-        
         self.update_table_view(new_results, self.current_offset)
         
     def update_table_view(self, new_results, new_results_offset):
@@ -797,12 +989,116 @@ class MainWindow(QWidget):
                 # Make cells read-only
                 item.setFlags(item.flags() ^ Qt.ItemIsEditable)
                 self.table_widget.setItem(row_idx, col_idx + 1, item)
+                
+        QTimer.singleShot(10, self._adjust_columns_to_fill)
+
+    def _adjust_columns_to_fill(self):
+        if not self.table_widget.isVisible():
+            return
+            
+        cols = self.table_widget.columnCount()
+        if cols <= 1:
+            return
+            
+        total_width = 0
+        for c in range(cols):
+            total_width += self.table_widget.horizontalHeader().sectionSize(c)
+            
+        viewport_width = self.table_widget.viewport().width()
+        
+        # If total width is less than viewport, stretch columns to fill the empty space
+        if total_width > 0 and total_width < viewport_width:
+            for c in range(1, cols):
+                self.table_widget.horizontalHeader().setSectionResizeMode(c, QHeaderView.Stretch)
+        else:
+            for c in range(1, cols):
+                self.table_widget.horizontalHeader().setSectionResizeMode(c, QHeaderView.Interactive)
+
+    def on_cell_clicked(self, row, column):
+        if column == 0:
+            self.table_widget.selectRow(row)
 
     def on_table_scroll(self, value):
         scrollbar = self.table_widget.verticalScrollBar()
         if scrollbar.maximum() > 0 and value >= scrollbar.maximum() - 2:
             if self.has_more_data and (not self.query_thread or not self.query_thread.isRunning()):
                 self.load_next_page()
+
+    def on_hscrollbar_range_changed(self, min, max):
+        # [변경전]
+        # if max > 0:
+        #     self.table_widget.setFixedHeight(167)
+        # else:
+        #     self.table_widget.setFixedHeight(150)
+        self.table_widget.setFixedHeight(179)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'btn_toggle_collapse') and hasattr(self, 'a_frame'):
+            btn_x = self.a_frame.width() - 45
+            # Center vertically when collapsed (height <= 35), else position at top margin (y = 8)
+            if self.a_frame.height() <= 35:
+                btn_y = (self.a_frame.height() - self.btn_toggle_collapse.height()) / 2
+            else:
+                btn_y = 8
+            self.btn_toggle_collapse.move(btn_x, btn_y)
+
+    def toggle_collapse(self):
+        self.set_collapsed_state(not self.is_collapsed, animate=True)
+
+    def set_collapsed_state(self, collapse: bool, animate: bool = True):
+        self.is_collapsed = collapse
+        
+        # [변경전]
+        # if self.show_admin:
+        #     expanded_h = 780
+        #     collapsed_h = 538
+        # else:
+        #     expanded_h = 462
+        #     collapsed_h = 220
+        # Adjusted collapsed height to 230 (no admin) / 548 (admin) to give a_frame a minimum height of 30px, 
+        # which allows Qt border-radius: 15px to render rounded corners correctly.
+        if self.show_admin:
+            expanded_h = 780
+            collapsed_h = 548
+        else:
+            expanded_h = 462
+            collapsed_h = 230
+            
+        target_h = collapsed_h if collapse else expanded_h
+        
+        # Update custom button collapsed status to trigger vector repaint (▼ / ▲)
+        self.btn_toggle_collapse.set_collapsed(collapse)
+        
+        # Performance optimization: immediately hide table and buttons to prevent layout recalculation lags on resize
+        if collapse:
+            self._update_a_frame_children_visibility(False)
+            
+        if not animate:
+            self.resize(self.width(), target_h)
+            self._update_a_frame_children_visibility(not collapse)
+            self.btn_toggle_collapse.set_collapsed(collapse)
+            return
+            
+        # Smooth transition animation targeting window size
+        from PySide6.QtCore import QPropertyAnimation, QEasingCurve, QSize
+        self.collapse_anim = QPropertyAnimation(self, b"size")
+        self.collapse_anim.setDuration(300)
+        self.collapse_anim.setStartValue(self.size())
+        self.collapse_anim.setEndValue(QSize(self.width(), target_h))
+        self.collapse_anim.setEasingCurve(QEasingCurve.OutQuad)
+        
+        # Show children after expand animation completes
+        if not collapse:
+            self.collapse_anim.finished.connect(lambda: self._update_a_frame_children_visibility(True))
+            
+        self.collapse_anim.start()
+        
+    def _update_a_frame_children_visibility(self, visible: bool):
+        self.table_widget.setVisible(visible)
+        self.status_label.setVisible(visible)
+        self.btn_use_data.setVisible(visible)
+        self.version_label.setVisible(visible)
 
     def load_next_page(self):
         if self.query_thread and self.query_thread.isRunning():
@@ -811,6 +1107,9 @@ class MainWindow(QWidget):
         if not self.has_more_data:
             return
             
+        import time
+        self.query_start_time = time.time()
+        self.set_state("thinking")
         self.current_offset += 50
         self.status_label.setText(f"데이터베이스 추가 조회 중... (Loaded: {len(self.search_results)})")
         

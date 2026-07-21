@@ -9,7 +9,7 @@
       "{as_find} 거래처 검색",
       "{as_find} 거래처"
     ],
-    "query": "DECLARE @fact char(2);\nDECLARE @as_find varchar(30);\nSET @fact = ?;\nSET @as_find = ?;\n\nSELECT '거래처명' = CASE WHEN substring(vend_fact,2,1) ='1'  THEN vend_name ELSE vend_nam3+'('+vend_name+')' END,\n       '거래처번호' = vend_keyx\n  FROM acvend\n WHERE vend_fact = @fact and\n       ( (vend_name like '%'+@as_find+'%') or (vend_nam3 like '%'+@as_find+'%') or (vend_keyx like '%'+@as_find+'%') ) -- # 거래처 조회시 거래처명 과 거래처번호 일부분을 가지고 조회 가능",
+    "query": "DECLARE @fact char(2);\nDECLARE @as_find varchar(30);\nSET @fact = ?;\nSET @as_find = ?;\n\nSELECT '거래처명' = CASE WHEN substring(vend_fact,2,1) ='1'  THEN isnull(vend_name,'') ELSE ( case when isnull(vend_nam3,'') ='' then isnull(vend_name,'') else isnull(vend_nam3,'') end ) END, /* 변경전: CASE WHEN substring(vend_fact,2,1) ='1'  THEN vend_name ELSE vend_nam3+'('+vend_name+')' END */\n       '거래처번호' = vend_keyx\n  FROM acvend\n WHERE vend_fact = @fact and\n       ( (vend_name like '%'+@as_find+'%') or (vend_nam3 like '%'+@as_find+'%') or (vend_keyx like '%'+@as_find+'%') ) -- # 거래처 조회시 거래처명 과 거래처번호 일부분을 가지고 조회 가능",
     "params": [
       {
         "name": "fact",
@@ -133,7 +133,7 @@
       "{as_find} 전화번호",
       "{as_find} 연락처"
     ],
-    "query": "DECLARE @fact char(2);\nDECLARE @as_find varchar(30);\nSET @fact = ?;\nSET @as_find = ?;\nSET @as_find = '%'+@as_find+'%';\n\nDECLARE @ColumnList NVARCHAR(MAX);\nDECLARE @SQL NVARCHAR(MAX);\n\nSET @ColumnList = STUFF((\n    SELECT ', obot_' + code_code + ' AS [' + code_name + ']'\n    FROM bacode WITH (NOLOCK)\n    WHERE code_fact = @fact \n      AND code_gubn = 'OBOT_1'\n    ORDER BY code_code\n    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');\n\nSET @SQL = N'\nSELECT ' + @ColumnList + N'\nFROM baobot WITH (NOLOCK)\n     INNER JOIN bacode WITH (NOLOCK) \n        ON ( obot_fact = code_fact \n             AND obot_gubn = code_code \n             AND code_gubn =''OBOT_GUBN'' )\nWHERE obot_fact = @fact \n  and( (obot_tex1 like @as_find ) or (obot_tex2 like @as_find ) or (obot_tex3 like @as_find) or (obot_tex4 like @as_find) )\n  AND obot_gubn = ''1''';\n\nEXEC sp_executesql @SQL, \n                   N'@fact CHAR(2), @as_find VARCHAR(30)', \n                   @fact = @fact, \n                   @as_find = @as_find;",
+    "query": "DECLARE @fact char(2);\nDECLARE @as_find varchar(30);\nDECLARE @setl char(2);\nSET @fact = ?;\nSET @as_find = ?;\nSET @setl = ?;\nSET @as_find = '%'+@as_find+'%';\n\nDECLARE @ColumnList NVARCHAR(MAX);\nDECLARE @SQL NVARCHAR(MAX);\n\nSET @ColumnList = STUFF((\n    SELECT ', obot_' + code_code + ' AS [' + code_name + ']'\n    FROM bacode WITH (NOLOCK)\n    WHERE code_fact = @fact \n      AND code_gubn = 'OBOT_1'\n    ORDER BY code_code\n    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');\n\nSET @SQL = N'\nSELECT ' + @ColumnList + N'\nFROM baobot WITH (NOLOCK)\nWHERE obot_fact = @fact \n  and obot_setl = @setl \n  and( (obot_tex1 like @as_find ) or (obot_tex2 like @as_find ) or (obot_tex3 like @as_find) or (obot_tex4 like @as_find) )\n  AND obot_gubn = ''1''';\n\nEXEC sp_executesql @SQL, \n                   N'@fact CHAR(2), @setl CHAR(2), @as_find VARCHAR(30)', \n                   @fact = @fact, \n                   @setl = @setl, \n                   @as_find = @as_find;",
     "params": [
       {
         "name": "fact",
@@ -143,6 +143,11 @@
       {
         "name": "as_find",
         "from_input": true
+      },
+      {
+        "name": "setl",
+        "from_input": false,
+        "default": "Y7"
       }
     ]
   }

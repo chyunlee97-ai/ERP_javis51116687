@@ -81,6 +81,7 @@ class AdminPanelsWidget(QWidget):
             }
         """)
         self.txt_sql.setPlaceholderText("질문을 입력하여 쿼리가 실행되면 여기에 생성된 SQL 스크립트가 표시됩니다.")
+        self.txt_sql.setMinimumHeight(200)
         
         sql_layout.addWidget(lbl_sql_title)
         sql_layout.addWidget(self.txt_sql)

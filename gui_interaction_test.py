@@ -35,7 +35,7 @@ def run_gui_test():
     window.raise_()
     window.activateWindow()
     
-    screenshot_dir = r"C:\Users\acon97.OSMAIL_SERVER\.gemini\antigravity\brain\2923908c-1f02-4e48-91fa-ce69b91d33d2"
+    screenshot_dir = r"C:\Users\acon97.OSMAIL_SERVER\.gemini\antigravity\brain\13f6e73d-0af6-4fb4-8a26-d178508c12c5"
     
     # We will orchestrate the test using a state machine via QTimer
     state = 0

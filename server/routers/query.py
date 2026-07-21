@@ -99,6 +99,8 @@ def handle_query(request: QueryRequest):
                     params.append(fact_val)
                 elif p_name == "as_find":
                     params.append(as_find_val)
+                elif p_name == "setl":
+                    params.append(fact_val)
                 else:
                     params.append(p_cfg.get("default", ""))
     
@@ -158,3 +160,145 @@ def handle_query(request: QueryRequest):
             message=f"데이터를 조회하는 중 오류가 발생했습니다: {str(e)}",
             query_script=query_script_str
         )
+
+class ProgramsRequest(BaseModel):
+    fact: str | None = None
+    lang: str = "KR"
+    idno: str = "Y6"
+
+class ProgramItem(BaseModel):
+    code_code: str
+    name: str
+    intent: str
+
+@router.post("/selective-programs", response_model=list[ProgramItem])
+def get_selective_programs(request: ProgramsRequest):
+    import re
+    fact_val = request.fact if request.fact else "Y6"
+    lang_val = request.lang if request.lang else "KR"
+    idno_val = request.idno if request.idno else "Y6"
+    
+    query_template = """
+    DECLARE @fact CHAR(2),
+            @idno CHAR(10),
+            @lang CHAR(2);
+
+    SET @fact = ?;
+    SET @lang = ?;
+    SET @idno = ?;
+
+    SELECT 'code_code' = code_code,
+           '조회시트' = CASE WHEN @lang = 'KR' THEN (case when isnull(code_name,'') <> '' then code_name else  code_code+'.'+code_engl end )
+                         WHEN @lang = 'EN' THEN (case when isnull(code_engl,'') <> '' then code_engl else  code_code+'.'+code_engl end ) 
+                         WHEN @lang = 'CH' THEN (case when isnull(code_chna,'') <> '' then code_chna else  code_code+'.'+code_engl end ) 
+                         WHEN @lang = 'VN' THEN (case when isnull(code_vina,'') <> '' then code_vina else  code_code+'.'+code_engl end ) 
+                         WHEN @lang = 'SP' THEN (case when isnull(code_span,'') <> '' then code_span else  code_code+'.'+code_engl end ) ELSE code_code+'.'+code_engl END,
+           'code_engl' = isnull(code_engl, '')
+      FROM bacode
+     WHERE code_gubn ='OBOT_PROG' and
+           code_fact = @fact and
+           exists ( SELECT *
+                      FROM obuspr
+                     WHERE uspr_fact = code_fact and uspr_meid = code_code and
+                           uspr_idno = @idno )
+    """
+    
+    try:
+        db_results = db_service.execute_query(
+            query_template,
+            [fact_val, lang_val, idno_val]
+        )
+        
+        code_to_intent = {
+            "1": "vend_search",
+            "2": "model_search",
+            "3": "prod_code_search",
+            "4": "part_detail_search",
+            "5": "part_tcod_search",
+            "6": "phone_search"
+        }
+        
+        formatted_programs = []
+        for row in db_results:
+            code = str(row.get("code_code", "")).strip()
+            name = str(row.get("조회시트", "")).strip()
+            engl = str(row.get("code_engl", "")).strip()
+            
+            intent = code_to_intent.get(code)
+            if not intent:
+                if engl:
+                    cleaned = re.sub(r'[^a-zA-Z0-9\s_]', '', engl)
+                    words = cleaned.lower().split()
+                    if words:
+                        name_str = "_".join(words)
+                        if not name_str.endswith("_search") and not name_str.endswith("_select"):
+                            name_str = name_str + "_search"
+                        name_str = name_str.replace("vender", "vend").replace("product", "prod").replace("part_number", "part_detail")
+                        intent = name_str
+                if not intent:
+                    intent = f"program_{code}_search"
+                    
+            formatted_programs.append(ProgramItem(
+                code_code=code,
+                name=name,
+                intent=intent
+            ))
+            
+        return formatted_programs
+    except Exception as e:
+        print(f"Error executing programs query: {e}")
+        fallback_programs = [
+            ProgramItem(code_code="1", name="거래처 조회" if lang_val == "KR" else "Vender Select", intent="vend_search"),
+            ProgramItem(code_code="2", name="모델정보 조회" if lang_val == "KR" else "Model Information", intent="model_search"),
+            ProgramItem(code_code="3", name="제품코드 조회" if lang_val == "KR" else "Product Code", intent="prod_code_search"),
+            ProgramItem(code_code="4", name="부품정보 조회" if lang_val == "KR" else "Part Number Select", intent="part_detail_search"),
+            ProgramItem(code_code="5", name="부품특성코드 조회" if lang_val == "KR" else "Part Property", intent="part_tcod_search"),
+            ProgramItem(code_code="6", name="내선번호 조회" if lang_val == "KR" else "Extension Select", intent="phone_search")
+        ]
+        return fallback_programs
+
+
+class LoginRequest(BaseModel):
+    fact: str = "Y6"
+    idno: str
+    pasw: str
+
+class LoginResponse(BaseModel):
+    success: bool
+    message: str
+
+@router.post("/login", response_model=LoginResponse)
+def handle_login(request: LoginRequest):
+    query_template = """
+    DECLARE @fact CHAR(2),
+            @idno VARCHAR(20),
+            @pasw VARCHAR(20),
+            @count INT;
+
+    SET @fact = ?;
+    SET @idno = ?;
+    SET @pasw = ?;
+
+    SELECT @count = COUNT(*)
+      FROM bauser
+     WHERE user_fact = @fact and
+           user_idno = @idno and
+           user_pasw = @pasw;
+
+    SET @count = ISNULL(@count, 0);
+
+    SELECT 'cnt' = @count;
+    """
+    try:
+        db_results = db_service.execute_query(
+            query_template,
+            [request.fact, request.idno, request.pasw]
+        )
+        if db_results and int(db_results[0].get("cnt", 0)) > 0:
+            return LoginResponse(success=True, message="Connect OK!")
+        else:
+            return LoginResponse(success=False, message="Invaild ID & Psw")
+    except Exception as e:
+        print(f"Error handling login request: {e}")
+        return LoginResponse(success=False, message="Invaild ID & Psw")
+

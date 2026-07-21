@@ -38,3 +38,24 @@ def ask(message: str = "", intent: str = None, fact: str = None, as_find: str = 
             "count": 0,
             "message": "서버에 연결할 수 없습니다. 서버가 켜져 있는지 확인해 주세요."
         }
+
+def get_selective_programs(fact: str, lang: str = "KR", idno: str = "Y6") -> list:
+    """
+    Fetches the authorized programs for selective query search from the API.
+    """
+    url = f"{config.API_BASE_URL.rstrip('/')}/selective-programs"
+    payload = {
+        "fact": fact,
+        "lang": lang,
+        "idno": idno
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=5)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Failed to fetch selective programs (HTTP {response.status_code})")
+            return []
+    except requests.exceptions.RequestException as e:
+        print(f"API request for selective programs failed: {e}")
+        return []

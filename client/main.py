@@ -8,6 +8,7 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 # Ensure import paths include local folders
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from ui.main_window import MainWindow
+from ui.login_window import LoginWindow
 
 def main():
     app = QApplication(sys.argv)
@@ -31,8 +32,11 @@ def main():
 
     app.setQuitOnLastWindowClosed(False)
     
-    # Initialize main window
-    window = MainWindow()
+    # Containers to reference dynamically
+    app_state = {
+        "login_window": None,
+        "main_window": None
+    }
     
     # 중복 실행 신호가 올 경우 기존 창 활성화
     def handle_new_connection():
@@ -41,20 +45,44 @@ def main():
             if client_socket.waitForReadyRead(1000):
                 msg = client_socket.readAll().data().decode("utf-8")
                 if msg == "SHOW":
-                    window.restore_from_tray()
+                    if app_state["main_window"]:
+                        app_state["main_window"].restore_from_tray()
+                    elif app_state["login_window"]:
+                        app_state["login_window"].show()
+                        app_state["login_window"].raise_()
+                        app_state["login_window"].activateWindow()
             client_socket.disconnectFromServer()
             
     local_server.newConnection.connect(handle_new_connection)
     
-    # Position the window in the bottom right corner of the desktop
-    screen = app.primaryScreen().geometry()
-    window_geom = window.geometry()
-    x = screen.width() - window_geom.width() - 50
-    y = screen.height() - window_geom.height() - 100
-    window.move(x, y)
-    window.show()
-    window.raise_()
-    window.activateWindow()
+    login_window = LoginWindow()
+    app_state["login_window"] = login_window
+    
+    # Handle login success
+    def handle_login_success(fact, idno, lang):
+        # Create and position MainWindow
+        main_window = MainWindow(fact=fact, idno=idno, lang=lang)
+        app_state["main_window"] = main_window
+        
+        screen = app.primaryScreen().geometry()
+        window_geom = main_window.geometry()
+        x = screen.width() - window_geom.width() - 50
+        y = screen.height() - window_geom.height() - 100
+        main_window.move(x, y)
+        main_window.show()
+        main_window.raise_()
+        main_window.activateWindow()
+        
+    login_window.login_success.connect(handle_login_success)
+    
+    # Center the login window on primary screen
+    screen_geom = app.primaryScreen().geometry()
+    lx = (screen_geom.width() - login_window.width()) // 2
+    ly = (screen_geom.height() - login_window.height()) // 2
+    login_window.move(lx, ly)
+    login_window.show()
+    login_window.raise_()
+    login_window.activateWindow()
     
     # Setup System Tray Icon
     tray_icon = QSystemTrayIcon(app)
@@ -81,7 +109,6 @@ def main():
             break
             
     if not icon_loaded:
-        # Fallback to programmatically drawing a beautiful red circle icon
         from PySide6.QtGui import QPixmap, QPainter, QColor, QBrush
         pixmap = QPixmap(32, 32)
         pixmap.fill(Qt.transparent)
@@ -98,11 +125,21 @@ def main():
     
     show_action = QAction("보이기 / 숨기기", tray_menu)
     def toggle_window():
-        if window.isVisible():
-            window.minimize_to_tray()
-        else:
-            window.restore_from_tray()
-            
+        mw = app_state["main_window"]
+        lw = app_state["login_window"]
+        if mw:
+            if mw.isVisible():
+                mw.minimize_to_tray()
+            else:
+                mw.restore_from_tray()
+        elif lw:
+            if lw.isVisible():
+                lw.hide()
+            else:
+                lw.show()
+                lw.raise_()
+                lw.activateWindow()
+                
     show_action.triggered.connect(toggle_window)
     tray_menu.addAction(show_action)
     

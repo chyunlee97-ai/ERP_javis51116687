@@ -21,7 +21,8 @@ General guidelines (Think Before Coding, Simplicity, Surgical Changes, etc.) are
 
 ## 3. Communication & Planning Language (언어 및 작성 정책)
 
-- **한국어 작성 강제**: 에이전트가 작성하는 모든 계획서(Implementation Plan), 태스크(Task tracker), Walkthrough 등 사용자에게 제공되는 **모든 문서는 반드시 한국어**로 작성해야 합니다. (예: "Search Pagination Implementation Plan" 대신 "검색 페이지네이션 구현 계획서" 등)
+- **한국어 작성 강제**: 에이전트가 작성하는 모든 계획서(Implementation Plan), 태스크(Task tracker), Walkthrough 등 사용자에게 제공되는 **모든 문서와 설명은 반드시 한국어(한글)로 작성 및 번역되어 있어야 합니다.** (예: "Search Pagination Implementation Plan" 대신 "검색 페이지네이션 구현 계획서" 등으로 사용하며, 본문 내용 또한 모두 한국어로 작성해야 합니다.)
+
 
 ## 4. Port Uniqueness & Registry Policy (포트 고유성 관리 정책)
 
